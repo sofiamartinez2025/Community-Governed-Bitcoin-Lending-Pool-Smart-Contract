@@ -123,3 +123,246 @@
   )
 )
 
+;; Comprehensive risk category collection validation utility
+;; This function ensures the entire collection of risk categories
+;; meets all format requirements and collection size constraints
+(define-private (validate-complete-risk-category-set (category-collection (list 10 (string-ascii 32))))
+  (and
+    ;; Require at least one risk category for proper classification
+    (> (len category-collection) u0)
+    ;; Enforce maximum category limit to prevent storage overflow
+    (<= (len category-collection) u10)
+    ;; Validate each individual category in the collection
+    (is-eq (len (filter validate-individual-risk-category category-collection)) (len category-collection))
+  )
+)
+
+;; Loan existence verification utility for database integrity checks
+;; This function confirms whether a specific loan exists in the
+;; community lending database by attempting record retrieval
+(define-private (verify-loan-exists-in-database (loan-sequence-id uint))
+  (is-some (map-get? community-lending-database { loan-sequence-id: loan-sequence-id }))
+)
+
+;; Loan amount extraction utility for financial calculations
+;; This function safely retrieves the requested loan amount from
+;; the database with appropriate fallback handling for missing records
+(define-private (extract-loan-amount-from-record (loan-sequence-id uint))
+  (default-to u0
+    (get requested-loan-amount
+      (map-get? community-lending-database { loan-sequence-id: loan-sequence-id })
+    )
+  )
+)
+
+;; Borrower ownership verification for loan authorization checks
+;; This function confirms that a specific principal is the legitimate
+;; borrower for a given loan by comparing database records
+(define-private (confirm-borrower-loan-ownership (loan-sequence-id uint) (verification-principal principal))
+  (match (map-get? community-lending-database { loan-sequence-id: loan-sequence-id })
+    ;; Compare borrower address if loan record exists
+    loan-data (is-eq (get borrower-wallet-address loan-data) verification-principal)
+    ;; Return false if loan record doesn't exist
+    false
+  )
+)
+
+;; ===============================================================================
+;; PUBLIC LENDING INTERFACE FUNCTIONS
+;; ===============================================================================
+
+;; Advanced loan application processing with comprehensive validation
+;; This function handles the complete loan application workflow including
+;; validation, risk assessment, and database storage operations
+(define-public (submit-comprehensive-loan-application
+  (loan-purpose-description (string-ascii 64))
+  (requested-loan-amount uint)
+  (borrower-creditworthiness-profile (string-ascii 128))
+  (lending-risk-categories (list 10 (string-ascii 32)))
+)
+  (let
+    (
+      ;; Generate unique sequential identifier for new loan application
+      (new-loan-sequence-number (+ (var-get master-loan-sequence-number) u1))
+    )
+    ;; ===============================================================================
+    ;; COMPREHENSIVE LOAN APPLICATION VALIDATION PROCEDURES
+    ;; ===============================================================================
+
+    ;; Validate loan purpose description meets format requirements
+    (asserts! (> (len loan-purpose-description) u0) invalid-loan-parameters-error)
+    (asserts! (< (len loan-purpose-description) u65) invalid-loan-parameters-error)
+
+    ;; Validate requested loan amount falls within acceptable ranges
+    (asserts! (> requested-loan-amount u0) loan-amount-exceeds-limits-error)
+    (asserts! (< requested-loan-amount u1000000000) loan-amount-exceeds-limits-error)
+
+    ;; Validate borrower creditworthiness profile completeness
+    (asserts! (> (len borrower-creditworthiness-profile) u0) invalid-loan-parameters-error)
+    (asserts! (< (len borrower-creditworthiness-profile) u129) invalid-loan-parameters-error)
+
+    ;; Validate risk category collection meets all requirements
+    (asserts! (validate-complete-risk-category-set lending-risk-categories) borrower-profile-validation-error)
+
+    ;; ===============================================================================
+    ;; LOAN DATABASE REGISTRATION AND STORAGE PROCEDURES
+    ;; ===============================================================================
+
+    ;; Store comprehensive loan application in community lending database
+    (map-insert community-lending-database
+      { loan-sequence-id: new-loan-sequence-number }
+      {
+        loan-purpose-description: loan-purpose-description,
+        borrower-wallet-address: tx-sender,
+        requested-loan-amount: requested-loan-amount,
+        loan-application-block: block-height,
+        borrower-creditworthiness-profile: borrower-creditworthiness-profile,
+        lending-risk-categories: lending-risk-categories
+      }
+    )
+
+    ;; Establish initial lending authorization for loan applicant
+    (map-insert lending-authorization-matrix
+      { loan-sequence-id: new-loan-sequence-number, authorization-requesting-borrower: tx-sender }
+      { lending-privilege-granted: true }
+    )
+
+    ;; Increment master loan sequence counter for next application
+    (var-set master-loan-sequence-number new-loan-sequence-number)
+
+    ;; Return unique loan identification number to applicant
+    (ok new-loan-sequence-number)
+  )
+)
+
+;; Comprehensive loan modification system with security validation
+;; This function enables authorized borrowers to update existing loan
+;; applications while maintaining strict security and validation protocols
+(define-public (process-comprehensive-loan-modification
+  (loan-sequence-id uint)
+  (updated-loan-purpose-description (string-ascii 64))
+  (updated-requested-loan-amount uint)
+  (updated-borrower-creditworthiness-profile (string-ascii 128))
+  (updated-lending-risk-categories (list 10 (string-ascii 32)))
+)
+  (let
+    (
+      ;; Retrieve existing loan record for modification validation
+      (existing-loan-data (unwrap! (map-get? community-lending-database { loan-sequence-id: loan-sequence-id })
+        loan-record-missing-error))
+    )
+    ;; ===============================================================================
+    ;; LOAN MODIFICATION AUTHORIZATION AND EXISTENCE CHECKS
+    ;; ===============================================================================
+
+    ;; Confirm target loan exists in the lending database
+    (asserts! (verify-loan-exists-in-database loan-sequence-id) loan-record-missing-error)
+
+    ;; Verify borrower ownership of the loan being modified
+    (asserts! (is-eq (get borrower-wallet-address existing-loan-data) tx-sender) borrower-verification-failed-error)
+
+    ;; ===============================================================================
+    ;; COMPREHENSIVE MODIFICATION PARAMETER VALIDATION
+    ;; ===============================================================================
+
+    ;; Validate updated loan purpose description format and length
+    (asserts! (> (len updated-loan-purpose-description) u0) invalid-loan-parameters-error)
+    (asserts! (< (len updated-loan-purpose-description) u65) invalid-loan-parameters-error)
+
+    ;; Validate updated loan amount falls within system constraints
+    (asserts! (> updated-requested-loan-amount u0) loan-amount-exceeds-limits-error)
+    (asserts! (< updated-requested-loan-amount u1000000000) loan-amount-exceeds-limits-error)
+
+    ;; Validate updated creditworthiness profile meets requirements
+    (asserts! (> (len updated-borrower-creditworthiness-profile) u0) invalid-loan-parameters-error)
+    (asserts! (< (len updated-borrower-creditworthiness-profile) u129) invalid-loan-parameters-error)
+
+    ;; Validate updated risk categories collection integrity
+    (asserts! (validate-complete-risk-category-set updated-lending-risk-categories) borrower-profile-validation-error)
+
+    ;; ===============================================================================
+    ;; LOAN RECORD UPDATE AND PERSISTENCE OPERATIONS
+    ;; ===============================================================================
+
+    ;; Update loan record with modified parameters while preserving metadata
+    (map-set community-lending-database
+      { loan-sequence-id: loan-sequence-id }
+      (merge existing-loan-data {
+        loan-purpose-description: updated-loan-purpose-description,
+        requested-loan-amount: updated-requested-loan-amount,
+        borrower-creditworthiness-profile: updated-borrower-creditworthiness-profile,
+        lending-risk-categories: updated-lending-risk-categories
+      })
+    )
+
+    ;; Confirm successful modification completion
+    (ok true)
+  )
+)
+
+;; Secure loan ownership transfer protocol with validation safeguards
+;; This function facilitates the transfer of loan ownership between
+;; community members while maintaining comprehensive security measures
+(define-public (execute-secure-loan-ownership-transfer (loan-sequence-id uint) (new-borrower-principal principal))
+  (let
+    (
+      ;; Retrieve current loan record for ownership verification
+      (current-loan-record (unwrap! (map-get? community-lending-database { loan-sequence-id: loan-sequence-id })
+        loan-record-missing-error))
+    )
+    ;; ===============================================================================
+    ;; OWNERSHIP TRANSFER VALIDATION AND SECURITY PROTOCOLS
+    ;; ===============================================================================
+
+    ;; Confirm target loan exists in the community lending database
+    (asserts! (verify-loan-exists-in-database loan-sequence-id) loan-record-missing-error)
+
+    ;; Verify current borrower ownership before allowing transfer
+    (asserts! (is-eq (get borrower-wallet-address current-loan-record) tx-sender) borrower-verification-failed-error)
+
+    ;; ===============================================================================
+    ;; LOAN OWNERSHIP TRANSFER EXECUTION PROCEDURES
+    ;; ===============================================================================
+
+    ;; Update loan record with new borrower principal information
+    (map-set community-lending-database
+      { loan-sequence-id: loan-sequence-id }
+      (merge current-loan-record { borrower-wallet-address: new-borrower-principal })
+    )
+
+    ;; Confirm successful ownership transfer completion
+    (ok true)
+  )
+)
+
+;; Permanent loan record removal with comprehensive security validation
+;; This function enables authorized borrowers to permanently delete
+;; loan records from the database with strict ownership verification
+(define-public (initiate-permanent-loan-record-deletion (loan-sequence-id uint))
+  (let
+    (
+      ;; Retrieve target loan record for deletion validation
+      (target-loan-record (unwrap! (map-get? community-lending-database { loan-sequence-id: loan-sequence-id })
+        loan-record-missing-error))
+    )
+    ;; ===============================================================================
+    ;; DELETION AUTHORIZATION AND VALIDATION PROCEDURES
+    ;; ===============================================================================
+
+    ;; Confirm target loan exists in the community lending database
+    (asserts! (verify-loan-exists-in-database loan-sequence-id) loan-record-missing-error)
+
+    ;; Verify borrower ownership before allowing permanent deletion
+    (asserts! (is-eq (get borrower-wallet-address target-loan-record) tx-sender) borrower-verification-failed-error)
+
+    ;; ===============================================================================
+    ;; PERMANENT LOAN RECORD REMOVAL EXECUTION
+    ;; ===============================================================================
+
+    ;; Remove loan record from community lending database permanently
+    (map-delete community-lending-database { loan-sequence-id: loan-sequence-id })
+
+    ;; Confirm successful loan record deletion
+    (ok true)
+  )
+)
