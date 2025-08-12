@@ -182,28 +182,7 @@
 )
   (let
     (
-      ;; Generate unique sequential identifier for new loan application
-      (new-loan-sequence-number (+ (var-get master-loan-sequence-number) u1))
-    )
-    ;; ===============================================================================
-    ;; COMPREHENSIVE LOAN APPLICATION VALIDATION PROCEDURES
-    ;; ===============================================================================
-
-    ;; Validate loan purpose description meets format requirements
-    (asserts! (> (len loan-purpose-description) u0) invalid-loan-parameters-error)
-    (asserts! (< (len loan-purpose-description) u65) invalid-loan-parameters-error)
-
-    ;; Validate requested loan amount falls within acceptable ranges
-    (asserts! (> requested-loan-amount u0) loan-amount-exceeds-limits-error)
-    (asserts! (< requested-loan-amount u1000000000) loan-amount-exceeds-limits-error)
-
-    ;; Validate borrower creditworthiness profile completeness
-    (asserts! (> (len borrower-creditworthiness-profile) u0) invalid-loan-parameters-error)
-    (asserts! (< (len borrower-creditworthiness-profile) u129) invalid-loan-parameters-error)
-
-    ;; Validate risk category collection meets all requirements
-    (asserts! (validate-complete-risk-category-set lending-risk-categories) borrower-profile-validation-error)
-
+  
     ;; ===============================================================================
     ;; LOAN DATABASE REGISTRATION AND STORAGE PROCEDURES
     ;; ===============================================================================
