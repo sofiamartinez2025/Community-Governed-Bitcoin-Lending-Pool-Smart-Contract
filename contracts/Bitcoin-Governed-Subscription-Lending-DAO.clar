@@ -221,20 +221,7 @@
       }
     )
 
-    ;; Establish initial lending authorization for loan applicant
-    (map-insert lending-authorization-matrix
-      { loan-sequence-id: new-loan-sequence-number, authorization-requesting-borrower: tx-sender }
-      { lending-privilege-granted: true }
-    )
-
-    ;; Increment master loan sequence counter for next application
-    (var-set master-loan-sequence-number new-loan-sequence-number)
-
-    ;; Return unique loan identification number to applicant
-    (ok new-loan-sequence-number)
-  )
-)
-
+  
 ;; Comprehensive loan modification system with security validation
 ;; This function enables authorized borrowers to update existing loan
 ;; applications while maintaining strict security and validation protocols
