@@ -182,7 +182,28 @@
 )
   (let
     (
-  
+      ;; Generate unique sequential identifier for new loan application
+      (new-loan-sequence-number (+ (var-get master-loan-sequence-number) u1))
+    )
+    ;; ===============================================================================
+    ;; COMPREHENSIVE LOAN APPLICATION VALIDATION PROCEDURES
+    ;; ===============================================================================
+
+    ;; Validate loan purpose description meets format requirements
+    (asserts! (> (len loan-purpose-description) u0) invalid-loan-parameters-error)
+    (asserts! (< (len loan-purpose-description) u65) invalid-loan-parameters-error)
+
+    ;; Validate requested loan amount falls within acceptable ranges
+    (asserts! (> requested-loan-amount u0) loan-amount-exceeds-limits-error)
+    (asserts! (< requested-loan-amount u1000000000) loan-amount-exceeds-limits-error)
+
+    ;; Validate borrower creditworthiness profile completeness
+    (asserts! (> (len borrower-creditworthiness-profile) u0) invalid-loan-parameters-error)
+    (asserts! (< (len borrower-creditworthiness-profile) u129) invalid-loan-parameters-error)
+
+    ;; Validate risk category collection meets all requirements
+    (asserts! (validate-complete-risk-category-set lending-risk-categories) borrower-profile-validation-error)
+
     ;; ===============================================================================
     ;; LOAN DATABASE REGISTRATION AND STORAGE PROCEDURES
     ;; ===============================================================================
@@ -200,7 +221,20 @@
       }
     )
 
-  
+    ;; Establish initial lending authorization for loan applicant
+    (map-insert lending-authorization-matrix
+      { loan-sequence-id: new-loan-sequence-number, authorization-requesting-borrower: tx-sender }
+      { lending-privilege-granted: true }
+    )
+
+    ;; Increment master loan sequence counter for next application
+    (var-set master-loan-sequence-number new-loan-sequence-number)
+
+    ;; Return unique loan identification number to applicant
+    (ok new-loan-sequence-number)
+  )
+)
+
 ;; Comprehensive loan modification system with security validation
 ;; This function enables authorized borrowers to update existing loan
 ;; applications while maintaining strict security and validation protocols
